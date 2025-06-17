@@ -1,0 +1,87 @@
+# General .cursorrules file for a Vue 2 project
+
+# Language Settings
+language:
+  - typescript
+  - javascript
+  - vue
+  - html
+  - css
+
+# Vue Specific Settings
+vue:
+  version: 2
+  useCompositionApi: true
+  useClassComponent: false
+
+# Libraries
+libraries:
+  - name: vux
+    description: "Mobile UI components library"
+  - name: vant
+    description: "Lightweight mobile UI components library"
+  - name: element-ui
+    description: "Desktop UI components library"
+  - name: vuex
+    description: "State management solution"
+  - name: vue-router
+    description: "Routing solution for Vue.js"
+
+# TypeScript and JavaScript
+typescript:
+  enabled: false
+  strict: false
+  allowJs: true
+
+javascript:
+  enabled: true
+  ecmaVersion: 2021
+
+# Components
+components:
+  useClassComponentSyntax: true
+  style:
+    scoped: true
+  script:
+    lang: "js" # Prefer TypeScript for scripts
+  template:
+    lang: "html"
+
+# Vuex
+vuex:
+  useModules: true
+  strictMode: process.env.NODE_ENV !== 'production'
+
+# Vue Router
+vue-router:
+  mode: "hash" # Use history mode for navigation
+
+# Linting and Formatting
+linting:
+  enableEslint: true
+  enablePrettier: true
+
+# Build Tools
+build:
+  useWebpack: true
+  useBabel: true
+
+# Code Style
+codeStyle:
+  indentSize: 2
+  useTabs: false
+  endOfLine: "lf"
+  quotes: "single"
+
+# Testing
+testing:
+  useJest: true
+
+# Documentation
+documentation:
+  useJsDoc: true
+
+# Miscellaneous
+misc:
+  autoSave: true
+  enableSnippets: true
