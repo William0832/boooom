@@ -6,6 +6,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   init() {
+    this.playerName = ''
     this.map = null;
     this.players = new Map();
     this.bombs = new Map();
@@ -13,7 +14,6 @@ export default class GameScene extends Phaser.Scene {
     this.walls = null;
     this.breakableWalls = null;
     this.explosions = new Set();
-    this.playerName = '';
     
     this.gameState = {
       lives: 3,
@@ -28,18 +28,6 @@ export default class GameScene extends Phaser.Scene {
     this.scoreText = null;
     this.gameOverText = null;
     this.bombsText = null;
-
-    // Listen for player name from Vue component
-    this.events.once('setPlayerName', (name) => {
-      this.playerName = name;
-      if (this.players.has('player1')) {
-        const player = this.players.get('player1');
-        const antenna = player.list.find(part => part instanceof Phaser.GameObjects.Text);
-        if (antenna) {
-          antenna.setText(name.charAt(0).toUpperCase());
-        }
-      }
-    });
   }
 
   preload() {
@@ -152,35 +140,33 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createPlayer() {
-    console.log('Creating player...');
+    console.log('Creating player with name:', this.playerName); // 调试日志
     
     // Create player container
     const player = this.add.container(48, 48);
     
     // Create body (center rectangle)
-    const body = this.add.rectangle(0, 0, 20, 20, 0x4A90E2);
+    const body = this.add.rectangle(0, 0, 20, 20 * 0.85, 0x4A90E2);
     
     // Create head (upper rectangle)
-    const head = this.add.rectangle(0, -12, 16, 12, 0x5B9AE8);
+    const head = this.add.rectangle(0, -10 * 0.85, 16, 12 * 0.85, 0x5B9AE8);
     
     // Create eyes (two small circles)
-    const leftEye = this.add.circle(-4, -12, 2, 0xFFFFFF);
-    const rightEye = this.add.circle(4, -12, 2, 0xFFFFFF);
+    const leftEye = this.add.circle(-4, -10 * 0.85, 2, 0xFFFFFF);
+    const rightEye = this.add.circle(4, -10 * 0.85, 2, 0xFFFFFF);
     
     // Create legs
-    const leftLeg = this.add.rectangle(-6, 12, 8, 8, 0x3A7BCE);
-    const rightLeg = this.add.rectangle(6, 12, 8, 8, 0x3A7BCE);
+    const leftLeg = this.add.rectangle(-6, 10 * 0.85, 8, 8 * 0.85, 0x3A7BCE);
+    const rightLeg = this.add.rectangle(6, 10 * 0.85, 8, 8 * 0.85, 0x3A7BCE);
 
-    // 创建天线文字（使用玩家名称，已经确保是单个大写字母）
-    const letter = this.playerName || 'A';
-    
-    const antenna = this.add.text(0, -24, letter, {
-      fontSize: '14px', // 稍微增大字体
+    // 使用玩家名称作为天线文字
+    const antenna = this.add.text(0, -20 * 0.85, this.playerName, {
+      fontSize: '14px',
       fontFamily: 'Arial',
       color: '#FFFFFF',
       stroke: '#000000',
-      strokeThickness: 2, // 增加描边宽度使文字更清晰
-      fontStyle: 'bold' // 使用粗体
+      strokeThickness: 2,
+      fontStyle: 'bold'
     });
     antenna.setOrigin(0.5);
     
@@ -191,7 +177,7 @@ export default class GameScene extends Phaser.Scene {
       duration: 700,
       yoyo: true,
       repeat: -1,
-      ease: 'Sine.easeInOut' // 添加缓动效果使动画更流畅
+      ease: 'Sine.easeInOut'
     });
 
     // Add all parts to container
@@ -202,8 +188,8 @@ export default class GameScene extends Phaser.Scene {
     
     // Enable physics with improved collision bounds
     this.physics.add.existing(player);
-    player.body.setSize(24, 32); // Adjust collision box size
-    player.body.setOffset(-12, -16); // Center the collision box
+    player.body.setSize(24, 32 * 0.85); // Adjust collision box size with new height
+    player.body.setOffset(-12, -16 * 0.85); // Center the collision box with new height
     player.body.setCollideWorldBounds(true);
     player.body.setBounce(0); // Prevent bouncing off walls
 

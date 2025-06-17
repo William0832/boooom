@@ -31,6 +31,10 @@ export default defineComponent({
       const cleanName = this.inputName.replace(/[^a-zA-Z0-9]/g, '');
       const firstChar = cleanName.charAt(0).toUpperCase() || 'A'; // 只取第一个字符并转为大写
       this.playerName = firstChar;
+      console.log('%c Line:34 debug 🍡 this.playerName', 'color:#ffdd4d', this.playerName)
+      
+      // 在创建游戏实例之前设置玩家名称
+      GameScene.prototype.playerName = this.playerName;
       
       // Initialize game after name is set
       this.$nextTick(() => {
@@ -46,13 +50,10 @@ export default defineComponent({
               debug: false
             }
           },
-          scene: GameScene
+          scene: GameScene,
         };
 
         this.game = new Phaser.Game(config);
-        
-        // Pass player name to the game scene
-        this.game.scene.getScene('GameScene').events.emit('setPlayerName', this.playerName);
       });
     },
     destroyGame() {
