@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
-import gameScene from '../scenes/GameScene';
+import GameScene from '../scenes/GameScene';
 
 const config = {
   type: Phaser.AUTO,
   parent: 'game',
-  width: 416, // 13 * 32
-  height: 352, // 11 * 32
+  width: 416,
+  height: 352,
   backgroundColor: '#2d2d2d',
   physics: {
     default: 'arcade',
@@ -14,12 +14,13 @@ const config = {
       debug: false
     }
   },
-  scene: gameScene,
+  scene: GameScene,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
-  pixelArt: true
+  pixelArt: true,
+  antialias: false
 };
 
-export default config; 
+export default config;

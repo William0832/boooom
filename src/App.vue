@@ -1,39 +1,127 @@
-<script setup>
-import { onMounted } from 'vue'
-import Phaser from 'phaser'
-import gameConfig from './game/config/config'
+<script>
+import { defineComponent } from 'vue';
+import Phaser from 'phaser';
+import GameScene from './game/scenes/GameScene';
 
-onMounted(() => {
-  new Phaser.Game(gameConfig)
-})
+export default defineComponent({
+  name: 'App',
+  data() {
+    return {
+      game: null,
+      inputName: '',
+      playerName: '',
+      nameError: '',
+      isValidName: false
+    };
+  },
+  methods: {
+    validateName() {
+      // 只要有输入就允许提交
+      this.isValidName = this.inputName.trim().length > 0;
+      
+      // 如果包含非字母数字字符，显示警告但不阻止提交
+      if (!/^[a-zA-Z0-9]*$/.test(this.inputName)) {
+        this.nameError = 'Warning: Only letters and numbers will be kept';
+      } else {
+        this.nameError = '';
+      }
+    },
+    startGame() {
+      // 移除任何非字母数字字符并取第一个字符
+      const cleanName = this.inputName.replace(/[^a-zA-Z0-9]/g, '');
+      const firstChar = cleanName.charAt(0).toUpperCase() || 'A'; // 只取第一个字符并转为大写
+      this.playerName = firstChar;
+      
+      // Initialize game after name is set
+      this.$nextTick(() => {
+        const config = {
+          type: Phaser.AUTO,
+          width: 416,
+          height: 352,
+          parent: 'game',
+          physics: {
+            default: 'arcade',
+            arcade: {
+              gravity: { y: 0 },
+              debug: false
+            }
+          },
+          scene: GameScene
+        };
+
+        this.game = new Phaser.Game(config);
+        
+        // Pass player name to the game scene
+        this.game.scene.getScene('GameScene').events.emit('setPlayerName', this.playerName);
+      });
+    },
+    destroyGame() {
+      if (this.game) {
+        this.game.destroy(true);
+        this.game = null;
+      }
+    }
+  },
+  beforeUnmount() {
+    this.destroyGame();
+  }
+});
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-900 flex flex-col items-center justify-center">
-    <!-- <h1 class="text-6xl font-bold text-yellow-500 mb-8 tracking-wider animate-pulse">
-      <span class="text-red-500">B</span>
-      <span class="text-orange-500">o</span>
-      <span class="text-yellow-500">o</span>
-      <span class="text-green-500">o</span>
-      <span class="text-blue-500">o</span>
-      <span class="text-indigo-500">o</span>
-      <span class="text-purple-500">o</span>
-      <span class="text-pink-500">m</span>
-      <span class="text-red-500">!</span>
-    </h1> -->
-    <div class="game-container bg-gray-800 p-4 rounded-lg">
-      <div class="game-info mb-4 flex flex-col gap-2">
-        <!-- Game info will be rendered here by Phaser -->
+  <div class="w-full h-screen bg-gray-900 flex items-center justify-center">
+    <!-- 名称输入界面 -->
+    <div v-if="!playerName" class="bg-gray-800 p-8 rounded-lg shadow-lg w-96 max-w-full mx-4">
+      <h2 class="text-3xl text-white mb-6 text-center font-bold">
+        <span class="text-red-500">B</span>
+        <span class="text-orange-500">o</span>
+        <span class="text-yellow-500">o</span>
+        <span class="text-green-500">o</span>
+        <span class="text-blue-500">o</span>
+        <span class="text-indigo-500">o</span>
+        <span class="text-purple-500">o</span>
+        <span class="text-pink-500">m</span>
+        <span class="text-red-500">!</span>
+      </h2>
+      <div class="space-y-6">
+        <div>
+          <label class="block text-gray-300 text-sm font-medium mb-2">
+            Enter Your Name
+          </label>
+          <input
+            type="text"
+            v-model="inputName"
+            @input="validateName"
+            placeholder="Letters and numbers only"
+            class="w-full px-4 py-2 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors duration-200"
+            maxlength="10"
+          />
+          <p v-if="nameError" class="mt-2 text-red-500 text-sm">{{ nameError }}</p>
+        </div>
+        <button
+          @click="startGame"
+          :disabled="!isValidName"
+          class="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+        >
+          Start Game
+        </button>
+        <div class="mt-4 text-gray-400 text-sm">
+          <p class="text-center mb-2 text-gray-300">Controls:</p>
+          <ul class="list-disc list-inside space-y-1">
+            <li>Arrow Keys: Move</li>
+            <li>Space: Place Bomb</li>
+          </ul>
+        </div>
       </div>
-      <div id="game" class="border-4 border-gray-700 rounded-lg overflow-hidden shadow-lg"></div>
     </div>
-    <div class="mt-6 text-gray-400 bg-gray-800 p-4 rounded-lg shadow-inner">
-      <p class="font-medium text-center text-yellow-400 mb-2">Controls</p>
-      <ul class="list-disc list-inside mt-2 space-y-1">
-        <li>Arrow Keys: Move</li>
-        <li>Space: Place Bomb</li>
-      </ul>
-    </div>
+
+    <!-- 游戏界面 -->
+    <template v-else>
+      <div class="game-container">
+        <div id="game"></div>
+        <div class="game-info"></div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -50,10 +138,41 @@ h1 {
 }
 
 .game-container {
-  width: 416px;
+  position: relative;
+  display: flex;
+  gap: 20px;
 }
 
 .game-info {
-  min-height: 40px;
+  padding: 1rem;
+  background-color: #2d3748;
+  border-radius: 8px;
+  min-width: 150px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+#game {
+  border: 2px solid #4a5568;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+canvas {
+  display: block;
+  margin: 0 auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.text-3xl span {
+  display: inline-block;
+  animation: pulse 2s infinite;
+  animation-delay: calc(var(--i) * 0.1s);
 }
 </style>

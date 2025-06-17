@@ -1,208 +1,159 @@
 import Phaser from 'phaser';
 
-const createGameScene = () => {
-  let map = null;
-  let players = new Map();
-  let bombs = new Map();
-  let cursors = null;
-  let walls = null;
-  let breakableWalls = null;
-  let explosions = new Set();
-  
-  // Game state
-  let gameState = {
-    lives: 3,
-    score: 0,
-    isGameOver: false,
-    maxBombs: 1,  // 最大炸弹数量
-    currentBombs: 0  // 当前放置的炸弹数量
-  };
-  
-  // UI elements
-  let livesText = null;
-  let scoreText = null;
-  let gameOverText = null;
-  let bombsText = null;  // 新增炸弹数量显示
+export default class GameScene extends Phaser.Scene {
+  constructor() {
+    super('GameScene');
+  }
 
-  const preload = function() {
-    // No image assets needed
-  };
-
-  const createUI = function() {
-    // Create UI background in the game-info div
-    const gameInfo = document.querySelector('.game-info');
+  init() {
+    this.map = null;
+    this.players = new Map();
+    this.bombs = new Map();
+    this.cursors = null;
+    this.walls = null;
+    this.breakableWalls = null;
+    this.explosions = new Set();
+    this.playerName = '';
     
-    // Create score text
-    const scoreDiv = document.createElement('div');
-    scoreDiv.className = 'text-white text-xl';
-    scoreDiv.textContent = 'Score: 0';
-    gameInfo.appendChild(scoreDiv);
+    this.gameState = {
+      lives: 3,
+      score: 0,
+      isGameOver: false,
+      maxBombs: 1,
+      currentBombs: 0,
+      bombPowerups: 0
+    };
     
-    // Create lives text
-    const livesDiv = document.createElement('div');
-    livesDiv.className = 'text-white text-xl';
-    livesDiv.textContent = 'Lives: 3';
-    gameInfo.appendChild(livesDiv);
-    
-    // Create bombs text
-    const bombsDiv = document.createElement('div');
-    bombsDiv.className = 'text-white text-xl';
-    bombsDiv.textContent = 'Bombs: 1';
-    gameInfo.appendChild(bombsDiv);
-    
-    // Store references for updating
-    scoreText = scoreDiv;
-    livesText = livesDiv;
-    bombsText = bombsDiv;
+    this.livesText = null;
+    this.scoreText = null;
+    this.gameOverText = null;
+    this.bombsText = null;
 
-    // Create game over text (hidden by default)
-    gameOverText = this.add.text(416/2, 352/2, 'GAME OVER\nPress SPACE to restart', {
-      fontSize: '32px',
-      fontFamily: 'Arial',
-      color: '#ff0000',
-      align: 'center'
-    });
-    gameOverText.setOrigin(0.5);
-    gameOverText.setDepth(2);
-    gameOverText.setVisible(false);
-  };
-
-  const updateUI = function() {
-    scoreText.textContent = 'Score: ' + gameState.score;
-    livesText.textContent = 'Lives: ' + gameState.lives;
-    bombsText.textContent = 'Bombs: ' + (gameState.maxBombs - gameState.currentBombs);
-  };
-
-  const showGameOver = function() {
-    gameOverText.setVisible(true);
-    this.input.keyboard.once('keydown-SPACE', () => {
-      restartGame.call(this);
-    });
-  };
-
-  const restartGame = function() {
-    gameState.lives = 3;
-    gameState.score = 0;
-    gameState.isGameOver = false;
-    gameState.currentBombs = 0;  // Reset current bombs count
-    gameOverText.setVisible(false);
-    
-    // Clear existing bombs and explosions
-    bombs.forEach(bomb => bomb.destroy());
-    bombs.clear();
-    explosions.forEach(explosion => explosion.destroy());
-    explosions.clear();
-    
-    // Reset player position
-    const player = players.get('player1');
-    player.setPosition(48, 48);
-    player.list.forEach(part => part.alpha = 1);
-    
-    // Recreate map
-    walls.clear(true, true);
-    breakableWalls.clear(true, true);
-    createMap.call(this);
-    
-    updateUI.call(this);
-  };
-
-  const addScore = function(points) {
-    gameState.score += points;
-    updateUI();
-  };
-
-  const handlePlayerHit = function() {
-    if (gameState.isGameOver) return;
-
-    const player = players.get('player1');
-    gameState.lives--;
-    updateUI();
-
-    // Visual feedback
-    this.tweens.add({
-      targets: player.list,
-      alpha: 0.5,
-      duration: 200,
-      yoyo: true,
-      repeat: 2,
-      onComplete: () => {
-        player.list.forEach(part => part.alpha = 1);
-        
-        // Check for game over
-        if (gameState.lives <= 0) {
-          gameState.isGameOver = true;
-          showGameOver.call(this);
+    // Listen for player name from Vue component
+    this.events.once('setPlayerName', (name) => {
+      this.playerName = name;
+      if (this.players.has('player1')) {
+        const player = this.players.get('player1');
+        const antenna = player.list.find(part => part instanceof Phaser.GameObjects.Text);
+        if (antenna) {
+          antenna.setText(name.charAt(0).toUpperCase());
         }
       }
     });
-  };
+  }
 
-  const createMap = function() {
+  preload() {
+    // 预加载资源
+  }
+
+  create() {
+    console.log('Creating game scene...');
+    
+    // 设置物理世界边界
+    this.physics.world.setBounds(0, 0, 416, 352);
+    
+    // 创建炸弹纹理
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x000000);
+    graphics.fillCircle(12, 12, 12);
+    graphics.generateTexture('bomb', 24, 24);
+    graphics.destroy();
+    
+    // 初始化游戏元素
+    this.createMap();
+    this.createPlayer();
+    this.createUI();
+    
+    // 设置控制器
+    this.setupControls();
+  }
+
+  update() {
+    if (this.gameState.isGameOver) return;
+    
+    const player = this.players.get('player1');
+    if (!player) return;
+    
+    // Reset velocity
+    player.body.setVelocity(0);
+    
+    // Handle movement
+    if (this.cursors.left.isDown) {
+      player.body.setVelocityX(-160);
+    } else if (this.cursors.right.isDown) {
+      player.body.setVelocityX(160);
+    }
+    
+    if (this.cursors.up.isDown) {
+      player.body.setVelocityY(-160);
+    } else if (this.cursors.down.isDown) {
+      player.body.setVelocityY(160);
+    }
+  }
+
+  createMap() {
+    console.log('Creating map...');
+    
     const mapWidth = 13;
     const mapHeight = 11;
     const tileSize = 32;
 
     // Create physics groups
-    walls = this.physics.add.staticGroup();
-    breakableWalls = this.physics.add.staticGroup();
+    this.walls = this.physics.add.staticGroup();
+    this.breakableWalls = this.physics.add.staticGroup();
 
     // Create map array
-    map = [];
+    this.map = [];
     for (let y = 0; y < mapHeight; y++) {
-      map[y] = [];
+      this.map[y] = [];
       for (let x = 0; x < mapWidth; x++) {
+        // 先创建浅色地板
+        const floor = this.add.rectangle(
+          x * tileSize + tileSize/2,
+          y * tileSize + tileSize/2,
+          tileSize,
+          tileSize,
+          0x3D4451 // 浅灰色地板
+        );
+        
         if (x === 0 || y === 0 || x === mapWidth - 1 || y === mapHeight - 1 ||
             (x % 2 === 0 && y % 2 === 0)) {
-          map[y][x] = 1; // Solid wall
-          // Create gray rectangle for solid wall
+          this.map[y][x] = 1; // Solid wall
+          // Create dark gray rectangle for solid wall
           const wall = this.add.rectangle(
             x * tileSize + tileSize/2,
             y * tileSize + tileSize/2,
             tileSize,
             tileSize,
-            0x666666
+            0x1F2937 // 深灰色墙壁
           );
-          walls.add(wall);
+          this.walls.add(wall);
         } else {
           if (Math.random() < 0.7 && 
               !(x === 1 && y === 1) && 
               !(x === 1 && y === 2) && 
               !(x === 2 && y === 1)) {
-            map[y][x] = 2; // Breakable wall
+            this.map[y][x] = 2; // Breakable wall
             // Create brown rectangle for breakable wall
             const breakableWall = this.add.rectangle(
               x * tileSize + tileSize/2,
               y * tileSize + tileSize/2,
               tileSize,
               tileSize,
-              0x8B4513
+              0x8B4513 // 保持原有的棕色可破坏墙
             );
-            breakableWalls.add(breakableWall);
+            this.breakableWalls.add(breakableWall);
           } else {
-            map[y][x] = 0; // Empty space
+            this.map[y][x] = 0; // Empty space
           }
         }
       }
     }
+  }
 
-    // Ensure player initial position is empty space
-    map[1][1] = 0; // Left top player
-    map[1][2] = 0;
-    map[2][1] = 0;
-
-    // Remove walls from player initial position
-    breakableWalls.getChildren().forEach(wall => {
-      const gridX = Math.floor(wall.x / tileSize);
-      const gridY = Math.floor(wall.y / tileSize);
-      if ((gridX === 1 && gridY === 1) ||
-          (gridX === 1 && gridY === 2) ||
-          (gridX === 2 && gridY === 1)) {
-        wall.destroy();
-      }
-    });
-  };
-
-  const createPlayer = function() {
+  createPlayer() {
+    console.log('Creating player...');
+    
     // Create player container
     const player = this.add.container(48, 48);
     
@@ -220,11 +171,34 @@ const createGameScene = () => {
     const leftLeg = this.add.rectangle(-6, 12, 8, 8, 0x3A7BCE);
     const rightLeg = this.add.rectangle(6, 12, 8, 8, 0x3A7BCE);
 
+    // 创建天线文字（使用玩家名称，已经确保是单个大写字母）
+    const letter = this.playerName || 'A';
+    
+    const antenna = this.add.text(0, -24, letter, {
+      fontSize: '14px', // 稍微增大字体
+      fontFamily: 'Arial',
+      color: '#FFFFFF',
+      stroke: '#000000',
+      strokeThickness: 2, // 增加描边宽度使文字更清晰
+      fontStyle: 'bold' // 使用粗体
+    });
+    antenna.setOrigin(0.5);
+    
+    // 添加天线摆动动画
+    this.tweens.add({
+      targets: antenna,
+      angle: { from: -15, to: 15 },
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut' // 添加缓动效果使动画更流畅
+    });
+
     // Add all parts to container
-    player.add([body, head, leftEye, rightEye, leftLeg, rightLeg]);
+    player.add([body, head, leftEye, rightEye, leftLeg, rightLeg, antenna]);
     
     // Store player reference
-    players.set('player1', player);
+    this.players.set('player1', player);
     
     // Enable physics with improved collision bounds
     this.physics.add.existing(player);
@@ -233,266 +207,303 @@ const createGameScene = () => {
     player.body.setCollideWorldBounds(true);
     player.body.setBounce(0); // Prevent bouncing off walls
 
-    // Add collisions with improved response
-    this.physics.add.collider(player, walls, null, null, this);
-    this.physics.add.collider(player, breakableWalls, null, null, this);
+    // Add collisions
+    this.physics.add.collider(player, this.walls);
+    this.physics.add.collider(player, this.breakableWalls);
+  }
 
-    // Add walking animation
-    this.tweens.add({
-      targets: [leftLeg, rightLeg],
-      y: '+=4',
-      duration: 200,
-      yoyo: true,
-      repeat: -1,
-      paused: true
+  createUI() {
+    console.log('Creating UI...');
+    
+    // Create UI background in the game-info div
+    const gameInfo = document.querySelector('.game-info');
+    if (!gameInfo) {
+      console.error('Game info container not found!');
+      return;
+    }
+    
+    // Create score text
+    const scoreDiv = document.createElement('div');
+    scoreDiv.className = 'text-white text-xl';
+    scoreDiv.textContent = 'Score: 0';
+    gameInfo.appendChild(scoreDiv);
+    
+    // Create lives text
+    const livesDiv = document.createElement('div');
+    livesDiv.className = 'text-white text-xl';
+    livesDiv.textContent = 'Lives: 3';
+    gameInfo.appendChild(livesDiv);
+    
+    // Create bombs text
+    const bombsDiv = document.createElement('div');
+    bombsDiv.className = 'text-white text-xl';
+    bombsDiv.textContent = 'Bombs: 1/1';
+    gameInfo.appendChild(bombsDiv);
+    
+    // Store references for updating
+    this.scoreText = scoreDiv;
+    this.livesText = livesDiv;
+    this.bombsText = bombsDiv;
+
+    // Create game over text (hidden by default)
+    this.gameOverText = this.add.text(416/2, 352/2, 'GAME OVER\nPress SPACE to restart', {
+      fontSize: '32px',
+      fontFamily: 'Arial',
+      color: '#ff0000',
+      align: 'center'
     });
-  };
+    this.gameOverText.setOrigin(0.5);
+    this.gameOverText.setDepth(2);
+    this.gameOverText.setVisible(false);
+  }
 
-  const setupControls = function() {
+  setupControls() {
+    console.log('Setting up controls...');
+    
     // Set up keyboard controls
-    cursors = this.input.keyboard.createCursorKeys();
+    this.cursors = this.input.keyboard.createCursorKeys();
     
     // Set up bomb placement key
     this.input.keyboard.on('keydown-SPACE', () => {
-      placeBomb.call(this);
+      if (!this.gameState.isGameOver) {
+        this.placeBomb();
+      } else {
+        this.restartGame();
+      }
     });
-  };
+  }
 
-  const placeBomb = function() {
-    if (gameState.isGameOver) return;
-    if (gameState.currentBombs >= gameState.maxBombs) return; // 检查炸弹数量
+  placeBomb() {
+    if (this.gameState.currentBombs >= this.gameState.maxBombs) return;
     
-    const player = players.get('player1');
+    const player = this.players.get('player1');
+    if (!player) {
+      console.error('Player not found!');
+      return;
+    }
+    
+    console.log('Player position:', player.x, player.y);
+    console.log('Player body:', player.body);
+    
     const gridX = Math.floor(player.x / 32);
     const gridY = Math.floor(player.y / 32);
     
-    // Check if there's already a bomb at this position
-    let bombExists = false;
-    bombs.forEach(bomb => {
-      const bombGridX = Math.floor(bomb.x / 32);
-      const bombGridY = Math.floor(bomb.y / 32);
-      if (bombGridX === gridX && bombGridY === gridY) {
-        bombExists = true;
-      }
-    });
+    console.log('Grid position:', gridX, gridY);
     
-    if (bombExists) return;
-    
-    // Create bomb
+    // Create bomb as a circle with darker color
     const bombId = Date.now();
-    const bombContainer = this.add.container(gridX * 32 + 16, gridY * 32 + 16);
+    const bomb = this.add.circle(
+      gridX * 32 + 16,
+      gridY * 32 + 16,
+      12,
+      0x111827 // 更深的炸弹颜色
+    );
     
-    // Create bomb circle
-    const bombCircle = this.add.circle(0, 0, 12, 0x000000);
+    console.log('Created bomb:', bomb);
     
-    // Create fuse effect (small rectangle on top)
-    const fuse = this.add.rectangle(0, -12, 2, 6, 0xff0000);
+    // Enable physics as static body
+    this.physics.add.existing(bomb, true);
     
-    // Add parts to container
-    bombContainer.add([bombCircle, fuse]);
+    console.log('Bomb physics:', bomb.body);
     
-    // Enable physics for the bomb container
-    this.physics.add.existing(bombContainer, true);
-    bombContainer.body.setImmovable(true);
-    
-    // Add collision between player and bomb
-    this.physics.add.collider(players.get('player1'), bombContainer);
-    
-    // Increment current bombs count
-    gameState.currentBombs++;
-    updateUI();
+    // Add collision
+    this.physics.add.collider(player, bomb);
     
     // Store bomb reference
-    bombs.set(bombId, bombContainer);
+    this.bombs.set(bombId, bomb);
     
-    // Fuse animation
-    this.tweens.add({
-      targets: fuse,
-      angle: { from: -20, to: 20 },
-      duration: 200,
-      yoyo: true,
-      repeat: -1
-    });
+    // Update UI
+    this.gameState.currentBombs++;
+    this.updateUI();
     
-    // Bomb blinking effect
+    // Animations
     this.tweens.add({
-      targets: bombCircle,
+      targets: bomb,
       alpha: 0.2,
       duration: 500,
       yoyo: true,
-      repeat: 7, // 4秒 = 8次 * 500ms
-      onComplete: () => {
-        explodeBomb.call(this, bombId, gridX, gridY);
+      repeat: 7
+    });
+
+    // Set explosion timer
+    this.time.delayedCall(4000, () => {
+      if (this.bombs.has(bombId)) {
+        this.explodeBomb(bombId, gridX, gridY);
       }
     });
-  };
+  }
 
-  const explodeBomb = function(bombId, x, y) {
-    const bomb = bombs.get(bombId);
-    if (bomb) {
-      bomb.destroy();
-      bombs.delete(bombId);
-      // Decrement current bombs count
-      gameState.currentBombs--;
-      updateUI();
-      
-      // Create explosions in cross pattern
-      createExplosion.call(this, x * 32, y * 32); // Center
-      
-      // Check each direction
-      const directions = [
-        {dx: 1, dy: 0},  // Right
-        {dx: -1, dy: 0}, // Left
-        {dx: 0, dy: 1},  // Down
-        {dx: 0, dy: -1}  // Up
-      ];
-      
-      directions.forEach(dir => {
-        let newX = x + dir.dx;
-        let newY = y + dir.dy;
-        
-        // Only create explosion if not blocked by solid wall
-        if (map[newY] && map[newY][newX] !== 1) {
-          if (createExplosion.call(this, newX * 32, newY * 32) === false) {
-            return; // Stop in this direction if blocked
-          }
-        }
-      });
-    }
-  };
+  explodeBomb(bombId, x, y) {
+    const bomb = this.bombs.get(bombId);
+    if (!bomb) return;
+    
+    // Create explosions
+    this.createExplosion(x * 32, y * 32);
+    
+    const directions = [
+      {dx: 1, dy: 0},
+      {dx: -1, dy: 0},
+      {dx: 0, dy: 1},
+      {dx: 0, dy: -1}
+    ];
+    
+    directions.forEach(dir => {
+      const newX = x + dir.dx;
+      const newY = y + dir.dy;
+      if (this.map[newY] && this.map[newY][newX] !== 1) {
+        this.createExplosion(newX * 32, newY * 32);
+      }
+    });
+    
+    // Cleanup
+    bomb.destroy();
+    this.bombs.delete(bombId);
+    this.gameState.currentBombs--;
+    this.updateUI();
+  }
 
-  const createExplosion = function(x, y) {
-    // Check if position is blocked by a wall
+  createExplosion(x, y) {
     const gridX = Math.floor(x / 32);
     const gridY = Math.floor(y / 32);
     
-    // Don't create explosion if solid wall is present
-    if (map[gridY][gridX] === 1) {
-      return false;
-    }
+    if (this.map[gridY][gridX] === 1) return false;
     
-    // Create explosion effect
-    const explosion = this.add.circle(
-      x + 16,
-      y + 16,
-      14,
-      0xff0000
-    );
-    
-    // Enable physics for explosion
+    const explosion = this.add.circle(x + 16, y + 16, 14, 0xff0000);
     this.physics.add.existing(explosion, true);
-    explosion.body.setCircle(14);
     
-    // Check for collision with breakable walls
-    const hitWalls = [];
-    breakableWalls.getChildren().forEach(wall => {
+    // Check for wall hits
+    this.breakableWalls.getChildren().forEach(wall => {
       const wallX = Math.floor(wall.x / 32);
       const wallY = Math.floor(wall.y / 32);
       if (wallX === gridX && wallY === gridY) {
-        hitWalls.push(wall);
-        addScore(10);
+        wall.destroy();
+        this.map[wallY][wallX] = 0;
+        this.gameState.score += 10;
+        this.updateUI();
+        
+        if (Math.random() < 0.25) {
+          this.createPowerup(wallX * 32, wallY * 32);
+        }
       }
     });
     
-    // Destroy hit walls
-    hitWalls.forEach(wall => {
-      wall.destroy();
-      map[Math.floor(wall.y / 32)][Math.floor(wall.x / 32)] = 0;
-    });
-    
-    // Add to explosions set
-    explosions.add(explosion);
-    
-    // Check for player hit with improved collision detection
-    const player = players.get('player1');
-    const distance = Phaser.Math.Distance.Between(
-      player.x,
-      player.y,
-      explosion.x,
-      explosion.y
-    );
-    
-    if (distance < 32) { // If player is within explosion radius
-      handlePlayerHit.call(this);
+    // Check for player hit
+    const player = this.players.get('player1');
+    if (player) {
+      const distance = Phaser.Math.Distance.Between(
+        player.x, player.y,
+        explosion.x, explosion.y
+      );
+      if (distance < 32) {
+        this.handlePlayerHit();
+      }
     }
     
-    // Fade out and destroy explosion
+    // Fade out explosion
     this.tweens.add({
       targets: explosion,
       alpha: 0,
       duration: 200,
       onComplete: () => {
         explosion.destroy();
-        explosions.delete(explosion);
       }
     });
     
     return true;
-  };
+  }
 
-  const create = function() {
-    this.physics.world.setBounds(0, 0, 416, 352);
-    createMap.call(this);
-    createPlayer.call(this);
-    setupControls.call(this);
-    createUI.call(this);
-  };
+  createPowerup(x, y) {
+    const powerup = this.add.container(x + 16, y + 16);
+    
+    const circle = this.add.circle(0, 0, 8, 0x00ff00);
+    const plus = this.add.text(0, 0, '+', {
+      fontSize: '16px',
+      fontFamily: 'Arial',
+      color: '#ffffff'
+    }).setOrigin(0.5);
+    
+    powerup.add([circle, plus]);
+    
+    this.physics.add.existing(powerup, true);
+    
+    this.physics.add.overlap(this.players.get('player1'), powerup, () => {
+      this.gameState.maxBombs++;
+      this.updateUI();
+      powerup.destroy();
+    });
+    
+    this.tweens.add({
+      targets: powerup,
+      alpha: 0.6,
+      duration: 1000,
+      yoyo: true,
+      repeat: -1
+    });
+  }
 
-  const update = function() {
-    if (gameState.isGameOver) return;
+  handlePlayerHit() {
+    if (this.gameState.isGameOver) return;
     
-    const player = players.get('player1');
-    const speed = 160;
-    let isMoving = false;
+    const player = this.players.get('player1');
+    this.gameState.lives--;
+    this.updateUI();
     
-    // Reset velocity
-    player.body.setVelocity(0);
-    
-    // Handle movement with improved physics
-    if (cursors.left.isDown) {
-      player.body.setVelocityX(-speed);
-      player.list.forEach(part => part.x = part.originalX || 0);
-      isMoving = true;
-    } else if (cursors.right.isDown) {
-      player.body.setVelocityX(speed);
-      player.list.forEach(part => {
-        if (!part.originalX) part.originalX = part.x;
-        part.x = -part.originalX;
-      });
-      isMoving = true;
+    if (this.gameState.lives <= 0) {
+      this.gameState.isGameOver = true;
+      this.gameOverText.setVisible(true);
+      return;
     }
     
-    if (cursors.up.isDown) {
-      player.body.setVelocityY(-speed);
-      isMoving = true;
-    } else if (cursors.down.isDown) {
-      player.body.setVelocityY(speed);
-      isMoving = true;
+    this.tweens.add({
+      targets: player.list,
+      alpha: 0.5,
+      duration: 200,
+      yoyo: true,
+      repeat: 2,
+      onComplete: () => {
+        player.list.forEach(part => part.alpha = 1);
+      }
+    });
+  }
+
+  restartGame() {
+    console.log('Restarting game...');
+    
+    this.gameState.lives = 3;
+    this.gameState.score = 0;
+    this.gameState.isGameOver = false;
+    this.gameState.currentBombs = 0;
+    this.gameState.maxBombs = 1;
+    this.gameState.bombPowerups = 0;
+    this.gameOverText.setVisible(false);
+    
+    // Clear existing bombs and explosions
+    this.bombs.clear();
+    
+    // Reset player position
+    const player = this.players.get('player1');
+    if (player) {
+      player.setPosition(48, 48);
+      player.list.forEach(part => part.alpha = 1);
     }
     
-    // Normalize diagonal movement
-    if (player.body.velocity.x !== 0 && player.body.velocity.y !== 0) {
-      player.body.setVelocity(
-        player.body.velocity.x * 0.707,
-        player.body.velocity.y * 0.707
-      );
-    }
+    // Recreate map
+    this.walls.clear(true, true);
+    this.breakableWalls.clear(true, true);
+    this.createMap();
     
-    // Update walking animation
-    const walkingAnimation = this.tweens.getTweensOf(player.list[4])[0];
-    if (isMoving && walkingAnimation.isPaused) {
-      walkingAnimation.resume();
-    } else if (!isMoving && !walkingAnimation.isPaused) {
-      walkingAnimation.pause();
+    this.updateUI();
+  }
+
+  updateUI() {
+    if (this.scoreText) {
+      this.scoreText.textContent = 'Score: ' + this.gameState.score;
     }
-  };
-
-  return {
-    key: 'GameScene',
-    preload,
-    create,
-    update
-  };
-};
-
-export default createGameScene(); 
+    if (this.livesText) {
+      this.livesText.textContent = 'Lives: ' + this.gameState.lives;
+    }
+    if (this.bombsText) {
+      this.bombsText.textContent = 'Bombs: ' + (this.gameState.maxBombs - this.gameState.currentBombs) + '/' + this.gameState.maxBombs;
+    }
+  }
+}
